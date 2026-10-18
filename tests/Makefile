@@ -82,7 +82,10 @@ verify-rules-generation:
 verify-binary-compat:
 	bash BinaryCompatTests.sh
 
-test: verify-path-rewrite verify-at-path-rewrite verify-path-standardize verify-fd-path-freshness verify-proc-policy verify-svc-self-image verify-image-span verify-mount-filter verify-rebind-repair lane-contract hook-matrix syscall-meta settings-structure jb-identifiers verify-environment-storage verify-rules-generation verify-binary-compat
+verify-dyld-atlas:
+	python3 verify-dyld-atlas.py
+
+test: verify-path-rewrite verify-at-path-rewrite verify-path-standardize verify-fd-path-freshness verify-proc-policy verify-svc-self-image verify-image-span verify-mount-filter verify-rebind-repair lane-contract hook-matrix syscall-meta settings-structure jb-identifiers verify-environment-storage verify-rules-generation verify-binary-compat verify-dyld-atlas
 
 clean:
 	rm -f harness harness.d

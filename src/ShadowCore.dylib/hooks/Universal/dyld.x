@@ -106,8 +106,6 @@ static uintptr_t _shdw_real_uuid_count = 0;
 // `_shdw_dyld_mirror_lock`.
 static const struct dyld_image_info* _shdw_original_info_array = NULL;
 static uint32_t _shdw_original_info_array_count = 0;
-static uintptr_t _shdw_original_atlas_addr = 0;
-static size_t _shdw_original_atlas_size = 0;
 static BOOL _shdw_originals_captured = NO;
 
 // True while the filtered mirror is published into dyld_all_image_infos.
@@ -2387,6 +2385,13 @@ static void shdw_dyld_publish_task_info_mirror(void) {
 
     memcpy(_shdw_task_dyld_info_mirror, _shdw_all_image_infos,
         sizeof(*_shdw_task_dyld_info_mirror));
+
+    // Atlas remains owned by dyld: its next load may deserialize this state.
+    // Apply this adjustment only to our separately allocated copy.
+    if(_shdw_task_dyld_info_mirror->version >= 16) {
+        _shdw_task_dyld_info_mirror->compact_dyld_image_info_addr = 0;
+        _shdw_task_dyld_info_mirror->compact_dyld_image_info_size = 0;
+    }
 }
 
 static void shdw_dyld_mirror_restore_originals(void) {
@@ -2413,12 +2418,6 @@ static void shdw_dyld_mirror_restore_originals(void) {
         _shdw_all_image_infos->infoArrayCount = _shdw_original_info_array_count;
         _shdw_all_image_infos->uuidArray = _shdw_real_uuid_array;
         _shdw_all_image_infos->uuidArrayCount = _shdw_real_uuid_count;
-
-        // Atlas (v16+, iOS 11+): the patch zeroed both, put dyld's originals back.
-        if(_shdw_all_image_infos->version >= 16) {
-            _shdw_all_image_infos->compact_dyld_image_info_addr = _shdw_original_atlas_addr;
-            _shdw_all_image_infos->compact_dyld_image_info_size = _shdw_original_atlas_size;
-        }
 
         vm_protect(mach_task_self(), page, vm_page_size, FALSE, _shdw_mirror_original_protection);
         shdw_dyld_publish_task_info_mirror();
@@ -2570,12 +2569,6 @@ static void shadowhook_dyld_rebuild_dyldinfo(void) {
         _shdw_original_info_array = _shdw_all_image_infos->infoArray;
         _shdw_original_info_array_count = _shdw_all_image_infos->infoArrayCount;
 
-        // Atlas (v16+, iOS 11+): the patch zeroes both fields, so keep the
-        // originals for the restore.
-        if(_shdw_all_image_infos->version >= 16) {
-            _shdw_original_atlas_addr = _shdw_all_image_infos->compact_dyld_image_info_addr;
-            _shdw_original_atlas_size = _shdw_all_image_infos->compact_dyld_image_info_size;
-        }
     } else if(_shdw_all_image_infos->uuidArray != _shdw_dyld_uuid_published
            && _shdw_all_image_infos->uuidArray
            && _shdw_all_image_infos->uuidArrayCount) {
@@ -2662,16 +2655,6 @@ static void shadowhook_dyld_rebuild_dyldinfo(void) {
             }
             // else: count is 0, uuidArray pointer left untouched — readers see
             // zero entries regardless of what the pointer points at.
-
-            // Atlas (v16+, iOS 11+): a second, complete serialized image table
-            // published via compact_dyld_image_info_addr/size — the filtered
-            // infoArray patch alone would leave it leaking every image. Zero
-            // both; dyld itself signals absence with size == 0. Guarded on the
-            // struct version: older dyld layouts lack these fields.
-            if(_shdw_all_image_infos->version >= 16) {
-                _shdw_all_image_infos->compact_dyld_image_info_addr = 0;
-                _shdw_all_image_infos->compact_dyld_image_info_size = 0;
-            }
 
             shdw_dyld_publish_task_info_mirror();
 

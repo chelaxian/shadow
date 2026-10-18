@@ -76,6 +76,11 @@ jobs:
       - name: Maintainer scripts check
         run: sh tests/MaintainerScriptTests.sh
 
+      - name: Full public regression suite
+        env:
+          THEOS: /opt/theos
+        run: make -C tests test
+
       # Source style is pinned by .clang-format and enforced here, so a stray
       # formatter run shows up as a failed check instead of a surprise diff.
       # The version is pinned: clang-format output is not stable across majors,
